@@ -45,16 +45,17 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-areas:
+    "pool detail"
+    "board detail"
+    "submit detail";
   align-items: start;
   gap: 1.5rem;
 }
 
-.main-column {
-  min-width: 0;
-}
-
 .detail-panel {
+  grid-area: detail;
   background: var(--panel);
   border-radius: var(--radius);
   padding: 1rem;
@@ -86,19 +87,30 @@ body {
 
 @media (max-width: 900px) {
   .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "pool"
+      "detail"
+      "board"
+      "submit";
+  }
+
+  .pool-section {
+    position: static;
   }
 
   .detail-panel {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
 }
 
 .pool-section {
+  grid-area: pool;
   background: var(--panel);
   border-radius: var(--radius);
   padding: 1rem;
-  margin-bottom: 1.5rem;
   box-shadow: var(--shadow);
   position: sticky;
   top: 0;
@@ -155,6 +167,7 @@ body {
 }
 
 .board {
+  grid-area: board;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -223,6 +236,7 @@ body {
 }
 
 .submit-section {
+  grid-area: submit;
   margin-top: 2rem;
   background: var(--panel);
   border-radius: var(--radius);

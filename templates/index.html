@@ -18,43 +18,10 @@
   </header>
 
   <div class="layout">
-    <div class="main-column">
-      <section class="pool-section">
-        <h2>Unplaced Topics <span id="pool-count" class="count-badge"></span></h2>
-        <div id="pool" class="tile-pool"></div>
-      </section>
-
-      <section class="board">
-        {% for day in days %}
-        <div class="day-block">
-          <h2 class="day-title">{{ day.day }}</h2>
-          <div class="time-columns">
-            {% for block in day.blocks %}
-            <div class="time-column">
-              <div class="time-col-header">{{ block.time }}</div>
-              {% for slot in block.slots %}
-              <div class="slot">
-                <div class="slot-label">Room {{ slot.room }}</div>
-                <div class="slot-dropzone" data-slot-id="{{ slot.id }}"></div>
-              </div>
-              {% endfor %}
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-        {% endfor %}
-      </section>
-
-      <section class="submit-section">
-        <label for="submitter-name">Your name</label>
-        <input type="text" id="submitter-name" maxlength="80" placeholder="Enter your name" autocomplete="name">
-        <div class="submit-buttons">
-          <button id="reset-btn" type="button" class="secondary-btn">Reset Board</button>
-          <button id="submit-btn" type="button" class="primary-btn">Submit Schedule</button>
-        </div>
-        <p id="status-message" role="status"></p>
-      </section>
-    </div>
+    <section class="pool-section">
+      <h2>Unplaced Topics <span id="pool-count" class="count-badge"></span></h2>
+      <div id="pool" class="tile-pool"></div>
+    </section>
 
     <aside class="detail-panel">
       <h2 class="detail-panel-title">Full Title</h2>
@@ -62,6 +29,37 @@
       <h3 id="detail-short" class="hidden"></h3>
       <p id="detail-full" class="hidden"></p>
     </aside>
+
+    <section class="board">
+      {% for day in days %}
+      <div class="day-block">
+        <h2 class="day-title">{{ day.day }}</h2>
+        <div class="time-columns">
+          {% for block in day.blocks %}
+          <div class="time-column">
+            <div class="time-col-header">{{ block.time }}</div>
+            {% for slot in block.slots %}
+            <div class="slot">
+              <div class="slot-label">Room {{ slot.room }}</div>
+              <div class="slot-dropzone" data-slot-id="{{ slot.id }}"></div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="submit-section">
+      <label for="submitter-name">Your name</label>
+      <input type="text" id="submitter-name" maxlength="80" placeholder="Enter your name" autocomplete="name">
+      <div class="submit-buttons">
+        <button id="reset-btn" type="button" class="secondary-btn">Reset Board</button>
+        <button id="submit-btn" type="button" class="primary-btn">Submit Schedule</button>
+      </div>
+      <p id="status-message" role="status"></p>
+    </section>
   </div>
 </div>
 
