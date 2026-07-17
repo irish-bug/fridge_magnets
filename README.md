@@ -64,3 +64,32 @@ before a submission is accepted.
 `submissions.csv` has one row per submission: a UTC timestamp, the
 submitter's name, then one column per slot (labeled `<Day> <time> — Room N`)
 containing the short name of the topic they placed there.
+
+## Distilling a final schedule
+
+Once submissions are in, run:
+
+```bash
+source .venv/bin/activate
+python distill_results.py
+```
+
+This reads `submissions.csv` and writes `results.csv` alongside it, plus
+prints a summary. It:
+
+1. Keeps only each person's most recent submission (by timestamp) if they
+   submitted more than once.
+2. Tallies, per slot, how many people placed each topic there.
+3. Assigns each topic to its strongest-supporting slot — a topic can only
+   win one slot, so if it's the top pick in more than one, it goes to
+   whichever slot voted for it the most, and the other slot(s) fall back to
+   their next-best options.
+4. Breaks a tie within a slot by preferring whichever tied topic hasn't
+   already won a different slot.
+5. Anything still ambiguous after that (a genuine tie with no vote-count or
+   already-won distinction to break it) is left as a `TIE` row in
+   `results.csv` for a human to decide — it's never guessed at.
+
+`results.csv` has one row per slot: `WINNER` (with its topic and vote
+count), `TIE` (one row per tied candidate), or `NO_CANDIDATE` if every topic
+that got votes for that slot ended up winning elsewhere.
