@@ -87,9 +87,34 @@ prints a summary. It:
 4. Breaks a tie within a slot by preferring whichever tied topic hasn't
    already won a different slot.
 5. Anything still ambiguous after that (a genuine tie with no vote-count or
-   already-won distinction to break it) is left as a `TIE` row in
-   `results.csv` for a human to decide — it's never guessed at.
+   already-won distinction to break it) is left as a `TIE` row — unless one
+   of the optional tie-break flags below is used.
 
-`results.csv` has one row per slot: `WINNER` (with its topic and vote
-count), `TIE` (one row per tied candidate), or `NO_CANDIDATE` if every topic
-that got votes for that slot ended up winning elsewhere.
+`results.csv` has one row per slot: `WINNER` (with its topic, vote count,
+and a `note` on how it was decided), `TIE` (one row per tied candidate), or
+`NO_CANDIDATE` if every topic that got votes for that slot ended up winning
+elsewhere.
+
+### Optional: breaking remaining ties
+
+```bash
+python distill_results.py --designate "Gregory"
+python distill_results.py --rotation chronological
+python distill_results.py --rotation random --seed 42
+python distill_results.py --designate "Gregory" --rotation chronological
+```
+
+- `--designate NAME` — for any slot still tied, if that person's own pick
+  for that slot is one of the tied candidates, it wins. Safe by
+  construction: one person's submission never places the same topic in two
+  slots, so their picks can't create a new conflict.
+- `--rotation {chronological,random}` — cycles tie-breaking turns across
+  *every* submitter, one still-open slot per turn (submission order, or
+  shuffled with `--seed N` for a reproducible shuffle you can show your
+  work on later). One pass, no retries: if a turn's pick was already
+  claimed elsewhere, that slot just stays a `TIE` rather than hunting for
+  someone else to decide it.
+- Both flags can be combined — `--designate` runs first, then `--rotation`
+  mops up whatever's still open.
+- Whatever's left after all of that is still written as `TIE` for a human
+  to make the final call on.

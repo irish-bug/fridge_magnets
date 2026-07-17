@@ -15,11 +15,27 @@ Algorithm:
    slot claims it first, and a slot-level tie is broken in favor of
    whichever candidate hasn't already won elsewhere.
 4. Whatever's still ambiguous after that (a genuine tie with no vote
-   count or already-won distinction to break it) is left unresolved for
-   a human to decide, rather than guessed at.
+   count or already-won distinction to break it) can optionally be
+   broken by one or both of:
+     --designate NAME       that person's own picks decide any remaining
+                             tie their pick is part of. Safe by
+                             construction: one person's submission never
+                             suggests the same topic for two slots.
+     --rotation {chronological,random}
+                             cycle tie-breaking turns across every
+                             submitter, one still-open slot per turn, in
+                             submission order or shuffled (use --seed for
+                             a reproducible shuffle). One pass, no
+                             retries: if a turn's pick was already
+                             claimed elsewhere, that slot just stays a
+                             tie rather than searching for someone else.
+   Anything still ambiguous after that is left as a TIE for a human to
+   decide, rather than guessed at.
 """
 
+import argparse
 import csv
+import random
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -63,7 +79,7 @@ def assign_winners(tally):
         for topic, count in topic_counts.items():
             tiers[count].append((slot, topic))
 
-    winners = {}      # slot -> (topic, count)
+    winners = {}      # slot -> (topic, count, note)
     unresolved = {}    # slot -> list of (topic, count) tied candidates
     used_topics = set()
     decided_slots = set()
@@ -90,7 +106,7 @@ def assign_winners(tally):
 
             if resolved:
                 for slot, topic in resolved:
-                    winners[slot] = (topic, count)
+                    winners[slot] = (topic, count, "top vote")
                     decided_slots.add(slot)
                     used_topics.add(topic)
                 live = [(s, t) for s, t in live if s not in decided_slots and t not in used_topics]
@@ -106,7 +122,88 @@ def assign_winners(tally):
     return winners, unresolved
 
 
+def find_submitter_picks(submissions, slot_columns, name):
+    """Return {slot: topic} for the submission matching name (case/whitespace-insensitive), or None."""
+    key = name.strip().lower()
+    for row in submissions:
+        if row["name"].strip().lower() == key:
+            return {slot: row[slot] for slot in slot_columns}
+    return None
+
+
+def ordered_submitter_picks(submissions, slot_columns, order, seed=None):
+    """Return [(name, {slot: topic}), ...] in submission order or shuffled."""
+    people = [
+        (row["name"], row["timestamp_utc"], {slot: row[slot] for slot in slot_columns})
+        for row in submissions
+    ]
+    if order == "chronological":
+        people.sort(key=lambda p: p[1])
+    elif order == "random":
+        random.Random(seed).shuffle(people)
+    else:
+        raise ValueError(f"Unknown order: {order}")
+    return [(name, picks) for name, _, picks in people]
+
+
+def apply_designate_tiebreak(unresolved, winners, used_topics, designate_name, picks, slot_order):
+    resolved_count = 0
+    for slot in slot_order:
+        candidates = unresolved.get(slot)
+        if not candidates:
+            continue
+        pick = picks.get(slot)
+        live = {topic for topic, count in candidates}
+        if pick in live and pick not in used_topics:
+            count = dict(candidates)[pick]
+            winners[slot] = (pick, count, f"tie-break: {designate_name}")
+            used_topics.add(pick)
+            del unresolved[slot]
+            resolved_count += 1
+    return resolved_count
+
+
+def apply_rotation_tiebreak(unresolved, winners, used_topics, ordered_people, slot_order):
+    open_slots = [slot for slot in slot_order if unresolved.get(slot)]
+    resolved_count = 0
+    n = len(ordered_people)
+    for i, slot in enumerate(open_slots):
+        candidates = unresolved.get(slot)
+        if not candidates:
+            continue
+        name, picks = ordered_people[i % n]
+        pick = picks.get(slot)
+        live = {topic for topic, count in candidates}
+        if pick in live and pick not in used_topics:
+            count = dict(candidates)[pick]
+            winners[slot] = (pick, count, f"tie-break: {name}'s turn")
+            used_topics.add(pick)
+            del unresolved[slot]
+            resolved_count += 1
+    return resolved_count
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Distill submissions.csv into a final schedule.")
+    parser.add_argument(
+        "--designate", metavar="NAME",
+        help="Break remaining ties using this person's own picks wherever they're a live candidate.",
+    )
+    parser.add_argument(
+        "--rotation", choices=["chronological", "random"],
+        help="After --designate (if given), break remaining ties by cycling tie-breaking turns "
+             "across every submitter, one still-open slot per turn.",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Random seed for --rotation random, so the shuffle order can be reproduced later.",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+
     if not CSV_PATH.exists():
         print(f"No submissions.csv found at {CSV_PATH}", file=sys.stderr)
         sys.exit(1)
@@ -120,6 +217,23 @@ def main():
 
     tally = tally_votes(submissions, slot_columns)
     winners, unresolved = assign_winners(tally)
+    used_topics = {topic for topic, count, note in winners.values()}
+
+    if args.designate:
+        picks = find_submitter_picks(submissions, slot_columns, args.designate)
+        if picks is None:
+            print(f"No submission found for --designate '{args.designate}'.", file=sys.stderr)
+            sys.exit(1)
+        resolved_count = apply_designate_tiebreak(
+            unresolved, winners, used_topics, args.designate, picks, slot_columns
+        )
+        print(f"Designate tie-break ({args.designate}) resolved {resolved_count} slot(s).\n")
+
+    if args.rotation:
+        ordered_people = ordered_submitter_picks(submissions, slot_columns, args.rotation, args.seed)
+        resolved_count = apply_rotation_tiebreak(unresolved, winners, used_topics, ordered_people, slot_columns)
+        seed_note = f" (seed={args.seed})" if args.rotation == "random" else ""
+        print(f"Rotation tie-break ({args.rotation}{seed_note}) resolved {resolved_count} slot(s).\n")
 
     # Any slot whose only candidates all got claimed by stronger slots
     # elsewhere never enters `winners` or `unresolved` — flag it explicitly.
@@ -129,23 +243,24 @@ def main():
 
     with open(RESULTS_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["slot", "status", "topic_short", "topic_full", "votes", "total_votes_for_slot"])
+        writer.writerow(["slot", "status", "topic_short", "topic_full", "votes", "total_votes_for_slot", "note"])
         for slot in slot_columns:
             total = sum(tally[slot].values())
             if slot in winners:
-                topic, count = winners[slot]
-                writer.writerow([slot, "WINNER", topic, TOPIC_FULL_BY_SHORT.get(topic, ""), count, total])
+                topic, count, note = winners[slot]
+                writer.writerow([slot, "WINNER", topic, TOPIC_FULL_BY_SHORT.get(topic, ""), count, total, note])
             elif unresolved[slot]:
                 for topic, count in sorted(unresolved[slot], key=lambda x: -x[1]):
-                    writer.writerow([slot, "TIE", topic, TOPIC_FULL_BY_SHORT.get(topic, ""), count, total])
+                    writer.writerow([slot, "TIE", topic, TOPIC_FULL_BY_SHORT.get(topic, ""), count, total, ""])
             else:
-                writer.writerow([slot, "NO_CANDIDATE", "", "", "", total])
+                writer.writerow([slot, "NO_CANDIDATE", "", "", "", total, ""])
 
     print("=== WINNERS ===")
     for slot in slot_columns:
         if slot in winners:
-            topic, count = winners[slot]
-            print(f"  {slot}: {topic} ({count}/{sum(tally[slot].values())} votes)")
+            topic, count, note = winners[slot]
+            suffix = f" [{note}]" if note != "top vote" else ""
+            print(f"  {slot}: {topic} ({count}/{sum(tally[slot].values())} votes){suffix}")
 
     ties = {slot: cands for slot, cands in unresolved.items() if cands}
     if ties:
