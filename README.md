@@ -10,10 +10,19 @@ on the tile itself.
 
 ## Running locally (development)
 
+After cloning onto a new machine, set up the virtual environment once:
+
 ```bash
-python3 -m venv .venv
+./setup.sh
+```
+
+(This just runs `python3 -m venv .venv` and `pip install -r requirements.txt`
+— run those two commands by hand instead if you'd rather not run a script.)
+
+Then, each time you want to run it:
+
+```bash
 source .venv/bin/activate
-pip install -r requirements.txt
 python app.py
 ```
 
