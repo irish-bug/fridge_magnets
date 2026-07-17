@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fridge Magnets — Workshop Schedule Builder</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <h1>Workshop Schedule Builder</h1>
+    <p class="instructions">
+      Drag every topic tile below into a room slot on the board. Tap or click a tile
+      to see its full title in the panel to the side. When all tiles are placed, enter
+      your name and submit.
+    </p>
+  </header>
+
+  <div class="layout">
+    <div class="main-column">
+      <section class="pool-section">
+        <h2>Unplaced Topics <span id="pool-count" class="count-badge"></span></h2>
+        <div id="pool" class="tile-pool"></div>
+      </section>
+
+      <section class="board">
+        {% for day in days %}
+        <div class="day-block">
+          <h2 class="day-title">{{ day.day }}</h2>
+          <div class="time-columns">
+            {% for block in day.blocks %}
+            <div class="time-column">
+              <div class="time-col-header">{{ block.time }}</div>
+              {% for slot in block.slots %}
+              <div class="slot">
+                <div class="slot-label">Room {{ slot.room }}</div>
+                <div class="slot-dropzone" data-slot-id="{{ slot.id }}"></div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </section>
+
+      <section class="submit-section">
+        <label for="submitter-name">Your name</label>
+        <input type="text" id="submitter-name" maxlength="80" placeholder="Enter your name" autocomplete="name">
+        <div class="submit-buttons">
+          <button id="reset-btn" type="button" class="secondary-btn">Reset Board</button>
+          <button id="submit-btn" type="button" class="primary-btn">Submit Schedule</button>
+        </div>
+        <p id="status-message" role="status"></p>
+      </section>
+    </div>
+
+    <aside class="detail-panel">
+      <h2 class="detail-panel-title">Full Title</h2>
+      <p id="detail-empty" class="detail-empty">Tap or click any tile to see its full title here.</p>
+      <h3 id="detail-short" class="hidden"></h3>
+      <p id="detail-full" class="hidden"></p>
+    </aside>
+  </div>
+</div>
+
+<template id="tile-template">
+  <div class="tile">
+    <span class="tile-short"></span>
+  </div>
+</template>
+
+<script id="topics-data" type="application/json">{{ topics | tojson }}</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
