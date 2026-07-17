@@ -20,17 +20,28 @@ Algorithm:
      --designate NAME       that person's own picks decide any remaining
                              tie their pick is part of. Safe by
                              construction: one person's submission never
-                             suggests the same topic for two slots.
+                             suggests the same topic for two slots. No
+                             fallback — if their pick for a slot isn't
+                             live, that slot just stays a tie.
      --rotation {chronological,random}
-                             cycle tie-breaking turns across every
-                             submitter, one still-open slot per turn, in
-                             submission order or shuffled (use --seed for
-                             a reproducible shuffle). One pass, no
-                             retries: if a turn's pick was already
-                             claimed elsewhere, that slot just stays a
-                             tie rather than searching for someone else.
-   Anything still ambiguous after that is left as a TIE for a human to
-   decide, rather than guessed at.
+                             each slot's natural turn-holder is fixed by
+                             its own position in the queue (submission
+                             order, or shuffled with --seed for a
+                             reproducible shuffle) — not shifted by how
+                             earlier slots were resolved. If that
+                             person's pick for this slot isn't live,
+                             search forward through the rest of the
+                             rotation (wrapping around) for the next
+                             person who does have a live pick here. This
+                             resolves almost every remaining tie.
+5. Anything still unresolved falls into one of two honest outcomes,
+   never guessed at:
+     TIE           two or more of the original candidates are still
+                   genuinely available and nothing broke the tie.
+     NO_CANDIDATE  every topic that ever got a vote for this slot ended
+                   up winning a different slot instead — there's
+                   nothing left from the original votes to assign here,
+                   and it needs a fresh decision.
 """
 
 import argparse
@@ -164,6 +175,11 @@ def apply_designate_tiebreak(unresolved, winners, used_topics, designate_name, p
 
 
 def apply_rotation_tiebreak(unresolved, winners, used_topics, ordered_people, slot_order):
+    """Each slot's natural turn-holder is ordered_people[slot_position % n] — fixed by the
+    slot's own position, not shifted by how earlier slots were resolved. If that person's
+    pick for this slot isn't live, search forward (wrapping) for the next person in the
+    rotation who does have a live candidate here; the next slot still starts from its own
+    natural position, not from wherever this search happened to land."""
     open_slots = [slot for slot in slot_order if unresolved.get(slot)]
     resolved_count = 0
     n = len(ordered_people)
@@ -171,15 +187,18 @@ def apply_rotation_tiebreak(unresolved, winners, used_topics, ordered_people, sl
         candidates = unresolved.get(slot)
         if not candidates:
             continue
-        name, picks = ordered_people[i % n]
-        pick = picks.get(slot)
         live = {topic for topic, count in candidates}
-        if pick in live and pick not in used_topics:
-            count = dict(candidates)[pick]
-            winners[slot] = (pick, count, f"tie-break: {name}'s turn")
-            used_topics.add(pick)
-            del unresolved[slot]
-            resolved_count += 1
+        natural_idx = i % n
+        for step in range(n):
+            name, picks = ordered_people[(natural_idx + step) % n]
+            pick = picks.get(slot)
+            if pick in live and pick not in used_topics:
+                count = dict(candidates)[pick]
+                winners[slot] = (pick, count, f"tie-break: {name}'s turn")
+                used_topics.add(pick)
+                del unresolved[slot]
+                resolved_count += 1
+                break
     return resolved_count
 
 
@@ -234,6 +253,14 @@ def main():
         resolved_count = apply_rotation_tiebreak(unresolved, winners, used_topics, ordered_people, slot_columns)
         seed_note = f" (seed={args.seed})" if args.rotation == "random" else ""
         print(f"Rotation tie-break ({args.rotation}{seed_note}) resolved {resolved_count} slot(s).\n")
+
+    # A candidate recorded for a slot can be claimed by a *different* slot
+    # after this one was tallied (a stronger vote count elsewhere, or a
+    # later tie-break pass) — drop anything no longer actually available
+    # so the report never lists an already-claimed topic as if it were
+    # still pickable.
+    for slot in list(unresolved.keys()):
+        unresolved[slot] = [(t, c) for t, c in unresolved[slot] if t not in used_topics]
 
     # Any slot whose only candidates all got claimed by stronger slots
     # elsewhere never enters `winners` or `unresolved` — flag it explicitly.

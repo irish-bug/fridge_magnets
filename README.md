@@ -91,9 +91,10 @@ prints a summary. It:
    of the optional tie-break flags below is used.
 
 `results.csv` has one row per slot: `WINNER` (with its topic, vote count,
-and a `note` on how it was decided), `TIE` (one row per tied candidate), or
-`NO_CANDIDATE` if every topic that got votes for that slot ended up winning
-elsewhere.
+and a `note` on how it was decided), `TIE` (one row per candidate still
+genuinely available and tied), or `NO_CANDIDATE` — every topic that ever
+got a vote for that slot ended up winning a different slot instead, so
+there's nothing left from the original votes to assign there.
 
 ### Optional: breaking remaining ties
 
@@ -107,14 +108,22 @@ python distill_results.py --designate "Gregory" --rotation chronological
 - `--designate NAME` — for any slot still tied, if that person's own pick
   for that slot is one of the tied candidates, it wins. Safe by
   construction: one person's submission never places the same topic in two
-  slots, so their picks can't create a new conflict.
-- `--rotation {chronological,random}` — cycles tie-breaking turns across
-  *every* submitter, one still-open slot per turn (submission order, or
-  shuffled with `--seed N` for a reproducible shuffle you can show your
-  work on later). One pass, no retries: if a turn's pick was already
-  claimed elsewhere, that slot just stays a `TIE` rather than hunting for
-  someone else to decide it.
+  slots, so their picks can't create a new conflict. No fallback — if their
+  pick for a slot isn't available, that slot just stays a `TIE`.
+- `--rotation {chronological,random}` — each slot's natural turn-holder is
+  fixed by its own position in the queue (submission order, or shuffled
+  with `--seed N` for a reproducible shuffle) — not shifted by how earlier
+  slots were resolved. If that person's pick isn't available, it searches
+  forward through the rest of the rotation for the next person who does
+  have a live pick for that specific slot. This resolves almost every
+  remaining tie in practice — what's left afterward is usually
+  `NO_CANDIDATE` (every original option for that slot won elsewhere)
+  rather than a real `TIE`.
 - Both flags can be combined — `--designate` runs first, then `--rotation`
-  mops up whatever's still open.
-- Whatever's left after all of that is still written as `TIE` for a human
-  to make the final call on.
+  mops up whatever's still open. Note this doesn't strictly do better than
+  `--rotation` alone: spending a designate's picks first can use up a
+  topic in an order that leaves fewer slots resolvable overall than letting
+  rotation handle everything itself. Worth comparing both on your real
+  data rather than assuming combined is always best.
+- Whatever's left after all of that is written as `TIE` or `NO_CANDIDATE`
+  for a human to make the final call on.
